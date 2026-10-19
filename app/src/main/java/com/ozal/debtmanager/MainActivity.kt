@@ -3,6 +3,12 @@ package com.ozal.debtmanager
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.app.KeyguardManager
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -35,6 +41,8 @@ class MainActivity : Activity() {
     private var pendingDueDate: Long = 0L
     private var pendingTxDate: Long = System.currentTimeMillis()
     private var pendingExportContent: String = ""
+    private var needsAuth = true
+    private var authInProgress = false
 
     data class Person(val id: Long, var name: String, var kind: String, var note: String, var dueDate: Long)
     data class Tx(val id: Long, val personId: Long, val amount: Long, val action: String, val date: Long, val note: String)
@@ -45,6 +53,46 @@ class MainActivity : Activity() {
         window.navigationBarColor = Color.rgb(20, 76, 67)
         load()
         renderHome()
+        people.forEach { scheduleReminder(it) }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 207)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (prefs.getBoolean("app_lock", false) && needsAuth && !authInProgress) {
+            val manager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+            if (!manager.isKeyguardSecure) {
+                prefs.edit().putBoolean("app_lock", false).apply()
+                Toast.makeText(this, "قفل امن گوشی فعال نیست؛ قفل برنامه غیرفعال شد.", Toast.LENGTH_LONG).show()
+                needsAuth = false
+            } else {
+                val intent = manager.createConfirmDeviceCredentialIntent("باز کردن مدیریت بدهی و طلب", "با رمز یا اثر انگشت گوشی تأیید کن")
+                if (intent != null) {
+                    authInProgress = true
+                    startActivityForResult(intent, 205)
+                }
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!authInProgress) needsAuth = true
+    }
+
+    private fun enableAppLock() {
+        val manager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if (!manager.isKeyguardSecure) {
+            Toast.makeText(this, "ابتدا قفل صفحه گوشی را در تنظیمات اندروید فعال کن.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val intent = manager.createConfirmDeviceCredentialIntent("فعال‌سازی قفل برنامه", "رمز یا اثر انگشت گوشی را تأیید کن")
+        if (intent != null) {
+            authInProgress = true
+            startActivityForResult(intent, 206)
+        }
     }
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
@@ -89,6 +137,7 @@ class MainActivity : Activity() {
         }
         root.addView(summary)
         root.addView(btn("＋ افزودن شخص / ثبت مبلغ اولیه") { addPerson() })
+        root.addView(btn(if (prefs.getBoolean("app_lock", false)) "قفل برنامه فعال است" else "فعال‌سازی قفل با رمز / اثر انگشت گوشی") { enableAppLock() })
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tools.addView(btn("پشتیبان‌گیری") { exportBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         tools.addView(btn("بازیابی") { importBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
@@ -242,7 +291,7 @@ class MainActivity : Activity() {
                     val k = kind.selectedItem.toString()
                     people.add(Person(id, n, k, note.text.toString().trim(), pendingDueDate))
                     transactions.add(Tx(id + 1L, id, a, if (k == "بدهی من") "قرض گرفتم" else "قرض دادم", System.currentTimeMillis(), "مبلغ اولیه"))
-                    save(); dialog.dismiss(); renderHome()
+                    save(); scheduleReminder(people.last()); dialog.dismiss(); renderHome()
                 }
             }
         }
@@ -278,7 +327,7 @@ class MainActivity : Activity() {
                 } else {
                     transactions.add(Tx(System.currentTimeMillis(), personId, a, action.selectedItem.toString(),
                         pendingTxDate, note.text.toString().trim()))
-                    save(); dialog.dismiss()
+                    save(); people.firstOrNull { it.id == personId }?.let { scheduleReminder(it) }; dialog.dismiss()
                     if (currentPersonId == personId) renderPerson(personId) else renderHome()
                 }
             }
@@ -301,10 +350,34 @@ class MainActivity : Activity() {
         timeInMillis = ms; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
+
+    private fun scheduleReminder(p: Person) {
+        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+        val intent = Intent(this, DueReminderReceiver::class.java).apply {
+            putExtra("personId", p.id)
+            putExtra("personName", p.name)
+        }
+        val pending = PendingIntent.getBroadcast(this, p.id.toInt(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        if (p.dueDate <= 0L || balance(p) <= 0L || p.dueDate < dayStart(System.currentTimeMillis())) {
+            alarm.cancel(pending)
+            return
+        }
+        val trigger = Calendar.getInstance().apply {
+            timeInMillis = p.dueDate
+            set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        if (trigger > System.currentTimeMillis()) {
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pending)
+        } else {
+            alarm.cancel(pending)
+        }
+    }
+
     private fun editDueDate(personId: Long) {
         val p = people.firstOrNull { it.id == personId } ?: return
         chooseDate(p.dueDate.takeIf { it > 0L } ?: System.currentTimeMillis()) {
-            p.dueDate = it; save(); renderHome()
+            p.dueDate = it; save(); scheduleReminder(p); renderHome()
         }
     }
     private fun deletePerson(personId: Long) {
@@ -405,6 +478,25 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android API but supported for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 205) {
+            authInProgress = false
+            if (resultCode == RESULT_OK) {
+                needsAuth = false
+            } else {
+                finish()
+            }
+            return
+        }
+        if (requestCode == 206) {
+            authInProgress = false
+            if (resultCode == RESULT_OK) {
+                prefs.edit().putBoolean("app_lock", true).apply()
+                needsAuth = false
+                Toast.makeText(this, "قفل برنامه فعال شد.", Toast.LENGTH_LONG).show()
+                renderHome()
+            }
+            return
+        }
         if ((requestCode == 201 || requestCode == 202) && resultCode == RESULT_OK) {
             val uri: Uri = data?.data ?: return
             try {
