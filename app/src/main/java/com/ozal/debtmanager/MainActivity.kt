@@ -10,6 +10,10 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.print.PrintAttributes
+import android.print.PrintManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
@@ -182,6 +186,7 @@ class MainActivity : Activity() {
         if (p.note.isNotBlank()) root.addView(text("یادداشت: " + p.note, 14f))
         root.addView(btn("＋ ثبت تراکنش جدید (قرض / پرداخت)") { addTransaction(personId) })
         root.addView(btn("اشتراک ریزحساب با واتساپ و سایر برنامه‌ها") { shareStatement(personId) })
+        root.addView(btn("چاپ یا ذخیره ریزحساب به صورت PDF") { printStatement(personId) })
         root.addView(text("تاریخچه کامل تراکنش‌ها", 20f, Color.rgb(20, 76, 67)))
         val list = transactions.filter { it.personId == personId }.sortedByDescending { it.date }
         if (list.isEmpty()) root.addView(text("هنوز تراکنشی ثبت نشده است.", 14f, Color.GRAY))
@@ -328,6 +333,33 @@ class MainActivity : Activity() {
             putExtra(Intent.EXTRA_TEXT, sb.toString())
         }
         startActivity(Intent.createChooser(intent, "ارسال ریزحساب"))
+    }
+
+    private fun printStatement(personId: Long) {
+        val p = people.firstOrNull { it.id == personId } ?: return
+        val body = StringBuilder()
+        transactions.filter { it.personId == personId }.sortedBy { it.date }.forEach { t ->
+            body.append("<tr><td>").append(date(t.date)).append("</td><td>").append(t.action)
+                .append("</td><td>").append(money(t.amount)).append(" تومان</td><td>")
+                .append(t.note.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+                .append("</td></tr>")
+        }
+        val html = "<html><meta charset='utf-8'><body dir='rtl' style='font-family:sans-serif;padding:24px'>" +
+            "<h2>ریزحساب " + p.name.replace("&", "&amp;").replace("<", "&lt;") + "</h2>" +
+            "<p>نوع حساب: " + p.kind + "</p><h3>مانده فعلی: " + money(balance(p)) + " تومان</h3>" +
+            "<p>سررسید: " + date(p.dueDate) + "</p><table border='1' cellspacing='0' cellpadding='8' width='100%'>" +
+            "<tr><th>تاریخ</th><th>شرح تراکنش</th><th>مبلغ</th><th>توضیحات</th></tr>" + body.toString() +
+            "</table></body></html>"
+        val web = WebView(this)
+        web.settings.defaultTextEncodingName = "UTF-8"
+        web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                val manager = getSystemService(PRINT_SERVICE) as PrintManager
+                val adapter = view.createPrintDocumentAdapter("RizHesab")
+                manager.print("ریزحساب " + p.name, adapter, PrintAttributes.Builder().build())
+            }
+        }
+        web.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
     }
 
     private fun exportCsv() {
