@@ -52,3 +52,5 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+# Retry build for the isolated UI redesign branch.
