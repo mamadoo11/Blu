@@ -50,8 +50,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(18, 19, 22)
-        window.navigationBarColor = Color.rgb(18, 19, 22)
+        window.statusBarColor = Color.rgb(10, 18, 32)
+        window.navigationBarColor = Color.rgb(10, 18, 32)
         load()
         renderHome()
         people.forEach { scheduleReminder(it) }
@@ -96,12 +96,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private val bg = Color.rgb(18, 19, 22)
-    private val panel = Color.rgb(29, 30, 35)
-    private val gold = Color.rgb(212, 177, 101)
-    private val muted = Color.rgb(165, 166, 173)
-    private val green = Color.rgb(91, 190, 139)
-    private val red = Color.rgb(226, 116, 111)
+    // حساب‌یار glass theme: deep navy surfaces, restrained champagne gold.
+    private val bg = Color.rgb(10, 18, 32)
+    private val panel = Color.rgb(22, 34, 53)
+    private val panelRaised = Color.rgb(28, 43, 65)
+    private val gold = Color.rgb(220, 184, 105)
+    private val muted = Color.rgb(160, 174, 193)
+    private val green = Color.rgb(105, 205, 159)
+    private val red = Color.rgb(239, 130, 130)
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun money(n: Long) = NumberFormat.getNumberInstance(Locale("fa", "IR")).format(n)
     private fun date(ms: Long): String = if (ms <= 0L) "تعیین نشده" else SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).format(Date(ms))
@@ -113,15 +115,26 @@ class MainActivity : Activity() {
             setPadding(dp(7), dp(7), dp(7), dp(7))
         }
     private fun rounded(view: View, color: Int, radius: Int = 18) {
-        view.background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(color); cornerRadius = dp(radius).toFloat()
+        view.background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                if (color == panel) panelRaised else color,
+                color
+            )
+        ).apply {
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), if (color == panel) Color.rgb(57, 73, 95) else Color.rgb(74, 69, 54))
         }
+        view.elevation = dp(2).toFloat()
     }
     private fun btn(s: String, action: () -> Unit): Button = Button(this).apply {
         text = s; isAllCaps = false; textSize = 13f
         setTextColor(gold)
         backgroundTintList = android.content.res.ColorStateList.valueOf(panel)
-        minHeight = dp(44)
+        minHeight = dp(46)
+        elevation = dp(2).toFloat()
+        stateListAnimator = null
+        setPadding(dp(10), dp(5), dp(10), dp(5))
         setOnClickListener { action() }
     }
     private fun input(hintText: String, numeric: Boolean = false): EditText = EditText(this).apply {
@@ -154,12 +167,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(6), dp(5), dp(6), dp(5))
-            setBackgroundColor(Color.rgb(24, 25, 29))
+            setBackgroundColor(Color.rgb(14, 24, 40))
         }
         listOf("خانه", "اشخاص", "تراکنش‌ها", "تنظیمات").forEachIndexed { index, label ->
             nav.addView(Button(this).apply {
                 text = label; isAllCaps = false; textSize = 11f; setTextColor(if ((title.startsWith("مدیریت") && index == 0) || (title.startsWith("پرونده") && index == 1)) gold else muted)
-                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(24,25,29))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(14,24,40))
                 setPadding(0, 0, 0, 0)
                 setOnClickListener {
                     when (index) {
