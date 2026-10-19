@@ -30,6 +30,7 @@ class MainActivity : Activity() {
     private var currentPersonId: Long? = null
     private var pendingDueDate: Long = 0L
     private var pendingTxDate: Long = System.currentTimeMillis()
+    private var pendingExportContent: String = ""
 
     data class Person(val id: Long, var name: String, var kind: String, var note: String, var dueDate: Long)
     data class Tx(val id: Long, val personId: Long, val amount: Long, val action: String, val date: Long, val note: String)
@@ -341,10 +342,14 @@ class MainActivity : Activity() {
         shareTextFile("ریزتراکنش‌ها.csv", "text/csv", sb.toString())
     }
     private fun shareTextFile(name: String, mime: String, content: String) {
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = mime; putExtra(Intent.EXTRA_SUBJECT, name); putExtra(Intent.EXTRA_TEXT, content)
+        pendingExportContent = content
+        val request = if (mime == "application/json") 201 else 202
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mime
+            putExtra(Intent.EXTRA_TITLE, name)
         }
-        startActivity(Intent.createChooser(intent, "خروجی گرفتن"))
+        startActivityForResult(intent, request)
     }
 
     private fun exportBackup() {
@@ -368,6 +373,17 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android API but supported for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if ((requestCode == 201 || requestCode == 202) && resultCode == RESULT_OK) {
+            val uri: Uri = data?.data ?: return
+            try {
+                contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(pendingExportContent) }
+                Toast.makeText(this, "فایل با موفقیت ذخیره شد.", Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {
+                Toast.makeText(this, "ذخیره فایل ناموفق بود.", Toast.LENGTH_LONG).show()
+            }
+            pendingExportContent = ""
+            return
+        }
         if (requestCode == 204 && resultCode == RESULT_OK) {
             val uri: Uri = data?.data ?: return
             try {
