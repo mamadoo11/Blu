@@ -43,14 +43,15 @@ class MainActivity : Activity() {
     private var pendingExportContent: String = ""
     private var needsAuth = true
     private var authInProgress = false
+    private var hideAmounts = false
 
     data class Person(val id: Long, var name: String, var kind: String, var note: String, var dueDate: Long)
     data class Tx(val id: Long, val personId: Long, val amount: Long, val action: String, val date: Long, val note: String)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(20, 76, 67)
-        window.navigationBarColor = Color.rgb(20, 76, 67)
+        window.statusBarColor = Color.rgb(18, 19, 22)
+        window.navigationBarColor = Color.rgb(18, 19, 22)
         load()
         renderHome()
         people.forEach { scheduleReminder(it) }
@@ -95,49 +96,104 @@ class MainActivity : Activity() {
         }
     }
 
+    private val bg = Color.rgb(18, 19, 22)
+    private val panel = Color.rgb(29, 30, 35)
+    private val gold = Color.rgb(212, 177, 101)
+    private val muted = Color.rgb(165, 166, 173)
+    private val green = Color.rgb(91, 190, 139)
+    private val red = Color.rgb(226, 116, 111)
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun money(n: Long) = NumberFormat.getNumberInstance(Locale("fa", "IR")).format(n)
     private fun date(ms: Long): String = if (ms <= 0L) "تعیین نشده" else SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).format(Date(ms))
-    private fun text(s: String, size: Float = 16f, color: Int = Color.rgb(34, 48, 44)): TextView =
+    private fun text(s: String, size: Float = 16f, color: Int = Color.rgb(238, 238, 240)): TextView =
         TextView(this).apply {
             text = s; textSize = size; setTextColor(color)
             gravity = Gravity.RIGHT or Gravity.CENTER_VERTICAL
             textDirection = View.TEXT_DIRECTION_RTL
-            setPadding(dp(5), dp(6), dp(5), dp(6))
+            setPadding(dp(7), dp(7), dp(7), dp(7))
         }
+    private fun rounded(view: View, color: Int, radius: Int = 18) {
+        view.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(color); cornerRadius = dp(radius).toFloat()
+        }
+    }
     private fun btn(s: String, action: () -> Unit): Button = Button(this).apply {
-        text = s; isAllCaps = false; setOnClickListener { action() }
+        text = s; isAllCaps = false; textSize = 13f
+        setTextColor(gold)
+        backgroundTintList = android.content.res.ColorStateList.valueOf(panel)
+        minHeight = dp(44)
+        setOnClickListener { action() }
     }
     private fun input(hintText: String, numeric: Boolean = false): EditText = EditText(this).apply {
         hint = hintText
+        setHintTextColor(muted)
+        setTextColor(Color.WHITE)
         textDirection = View.TEXT_DIRECTION_RTL
         if (numeric) inputType = 2
-        setPadding(dp(8), dp(6), dp(8), dp(6))
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        rounded(this, panel, 12)
     }
     private fun page(title: String) {
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setBackgroundColor(bg)
+        }
         val scroll = ScrollView(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(16), dp(12), dp(16), dp(24))
-            setBackgroundColor(Color.rgb(247, 249, 248))
+            setPadding(dp(16), dp(14), dp(16), dp(18))
+            setBackgroundColor(bg)
         }
         scroll.addView(root)
-        setContentView(scroll)
-        root.addView(text(title, 25f, Color.rgb(20, 76, 67)))
+        outer.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(6), dp(5), dp(6), dp(5))
+            setBackgroundColor(Color.rgb(24, 25, 29))
+        }
+        listOf("خانه", "اشخاص", "تراکنش‌ها", "تنظیمات").forEachIndexed { index, label ->
+            nav.addView(Button(this).apply {
+                text = label; isAllCaps = false; textSize = 11f; setTextColor(if ((title.startsWith("مدیریت") && index == 0) || (title.startsWith("پرونده") && index == 1)) gold else muted)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(24,25,29))
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    when (index) {
+                        0 -> renderHome()
+                        1 -> renderPeople()
+                        2 -> renderTransactions()
+                        3 -> renderSettings()
+                    }
+                }
+            }, LinearLayout.LayoutParams(0, dp(50), 1f))
+        }
+        outer.addView(nav)
+        setContentView(outer)
+        root.addView(text(title, 25f, gold))
+        val line = View(this).apply { setBackgroundColor(Color.rgb(73, 64, 45)) }
+        root.addView(line, LinearLayout.LayoutParams(-1, dp(1)))
     }
 
     private fun renderHome() {
         currentPersonId = null
-        page("مدیریت بدهی و طلب")
-        root.addView(text("دفتر حساب شخصی • ذخیره روی همین گوشی • بدون نیاز به اینترنت", 13f, Color.DKGRAY))
+        page("حساب‌یار")
+        root.addView(text("دفتر مالی شخصی شما", 14f, muted))
+        root.addView(text("اطلاعات شما فقط روی همین گوشی ذخیره می‌شود", 12f, muted))
         summary = text("", 16f, Color.WHITE).apply {
-            setPadding(dp(12), dp(14), dp(12), dp(14))
-            setBackgroundColor(Color.rgb(20, 76, 67))
+            setPadding(dp(16), dp(18), dp(16), dp(18))
+            setTextColor(Color.WHITE)
+            rounded(this, panel, 20)
         }
-        root.addView(summary)
-        root.addView(btn("＋ افزودن شخص / ثبت مبلغ اولیه") { addPerson() })
-        root.addView(btn(if (prefs.getBoolean("app_lock", false)) "قفل برنامه فعال است" else "فعال‌سازی قفل با رمز / اثر انگشت گوشی") { enableAppLock() })
+        root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12); bottomMargin = dp(12) })
+        val quick = btn("＋ ثبت تراکنش جدید") { quickTransaction() }
+        quick.setTextColor(Color.rgb(18,19,22))
+        quick.backgroundTintList = android.content.res.ColorStateList.valueOf(gold)
+        root.addView(quick, LinearLayout.LayoutParams(-1, dp(54)))
+        root.addView(btn("＋ افزودن شخص جدید") { addPerson() })
         val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tools.addView(btn("پشتیبان‌گیری") { exportBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         tools.addView(btn("بازیابی") { importBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
@@ -153,10 +209,66 @@ class MainActivity : Activity() {
             filterRow.addView(btn(f) { filter = f; refreshRows() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         }
         root.addView(filterRow)
-        root.addView(text("پرونده اشخاص", 20f, Color.rgb(20, 76, 67)))
+        root.addView(text("پرونده اشخاص", 20f, gold))
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(rows)
         refreshRows()
+    }
+
+
+    private fun quickTransaction() {
+        if (people.isEmpty()) {
+            AlertDialog.Builder(this).setMessage("برای ثبت تراکنش، ابتدا یک شخص اضافه کن.")
+                .setPositiveButton("افزودن شخص") { _, _ -> addPerson() }
+                .setNegativeButton("بعداً", null).show()
+            return
+        }
+        val names = people.map { it.name }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("انتخاب شخص")
+            .setItems(names) { _, which -> addTransaction(people[which].id) }.show()
+    }
+
+    private fun renderPeople() { renderHome() }
+
+    private fun renderTransactions() {
+        page("همه تراکنش‌ها")
+        root.addView(text("فهرست تراکنش‌های ثبت‌شده", 14f, muted))
+        if (transactions.isEmpty()) {
+            root.addView(text("هنوز تراکنشی ثبت نشده است. از دکمه ثبت تراکنش جدید شروع کن.", 15f, muted))
+            root.addView(btn("＋ ثبت تراکنش جدید") { quickTransaction() })
+            return
+        }
+        transactions.sortedByDescending { it.date }.forEach { t ->
+            val p = people.firstOrNull { it.id == t.personId } ?: return@forEach
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                rounded(this, panel, 16)
+                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(5), 0, dp(5)) }
+            }
+            card.addView(text(p.name, 16f, gold))
+            card.addView(text(t.action + " • " + date(t.date), 13f, muted))
+            card.addView(text(money(t.amount) + " تومان", 18f, if (t.action == "قرض گرفتم" || t.action == "قرض دادم") green else red))
+            if (t.note.isNotBlank()) card.addView(text(t.note, 13f, muted))
+            card.addView(btn("مشاهده پرونده") { renderPerson(p.id) })
+            root.addView(card)
+        }
+    }
+
+    private fun renderSettings() {
+        page("تنظیمات")
+        root.addView(text("حریم خصوصی و پشتیبان‌گیری", 18f, gold))
+        root.addView(text("اطلاعات به‌صورت محلی ذخیره می‌شود. برای جلوگیری از ازدست‌رفتن داده‌ها، هر چند وقت یک‌بار نسخه پشتیبان بگیر.", 14f, muted))
+        root.addView(btn("پشتیبان‌گیری JSON") { exportBackup() })
+        root.addView(btn("بازیابی نسخه پشتیبان") { importBackup() })
+        root.addView(btn("خروجی اکسل‌خوان CSV") { exportCsv() })
+        root.addView(btn(if (prefs.getBoolean("app_lock", false)) "قفل برنامه فعال است" else "فعال‌سازی قفل با رمز / اثر انگشت گوشی") { enableAppLock() })
+        root.addView(text("نمایش اطلاعات", 18f, gold))
+        root.addView(btn(if (hideAmounts) "نمایش مبلغ‌ها" else "مخفی‌کردن مبلغ‌ها") {
+            hideAmounts = !hideAmounts
+            renderSettings()
+        })
+        root.addView(text("نسخه 2.0 • حساب‌یار", 12f, muted))
     }
 
     private fun balance(p: Person): Long {
@@ -176,8 +288,10 @@ class MainActivity : Activity() {
         if (!::rows.isInitialized || !::summary.isInitialized) return
         val openDebt = people.filter { it.kind == "بدهی من" }.sumOf { balance(it).coerceAtLeast(0L) }
         val openReceivable = people.filter { it.kind == "طلب من" }.sumOf { balance(it).coerceAtLeast(0L) }
-        summary.text = "طلب از دیگران: " + money(openReceivable) + " تومان\nبدهی من به دیگران: " + money(openDebt) +
-            " تومان\nمانده خالص: " + money(openReceivable - openDebt) + " تومان\nتعداد پرونده‌ها: " + people.size
+        summary.text = "مانده خالص\n" + (if (hideAmounts) "••••••" else money(openReceivable - openDebt) + " تومان") +
+            "\n\nطلب از دیگران   " + (if (hideAmounts) "••••" else money(openReceivable) + " تومان") +
+            "\nبدهی من به دیگران   " + (if (hideAmounts) "••••" else money(openDebt) + " تومان") +
+            "\n\nپرونده‌ها: " + people.size + "     تراکنش‌ها: " + transactions.size
         rows.removeAllViews()
         val today = dayStart(System.currentTimeMillis())
         val visible = people.filter { p ->
@@ -191,7 +305,7 @@ class MainActivity : Activity() {
             matchesFilter && (searchText.isBlank() || p.name.contains(searchText.trim(), true))
         }.sortedByDescending { it.id }
         if (visible.isEmpty()) {
-            rows.addView(text("موردی پیدا نشد. با دکمه بالا اولین پرونده را ثبت کن.", 14f, Color.GRAY))
+            rows.addView(text("موردی پیدا نشد. با دکمه بالا اولین پرونده را ثبت کن.", 14f, muted))
             return
         }
         visible.forEach { p ->
@@ -199,16 +313,16 @@ class MainActivity : Activity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(10), dp(7), dp(10), dp(7))
-                setBackgroundColor(Color.WHITE)
+                rounded(this, panel, 16)
                 layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(5), 0, dp(5)) }
             }
-            card.addView(text(p.name, 18f, Color.rgb(20, 76, 67)))
+            card.addView(text(p.name, 18f, gold))
             card.addView(text((if (p.kind == "بدهی من") "من به این شخص بدهکارم" else "این شخص به من بدهکار است") +
                 "\nمانده: " + money(b) + " تومان", 15f))
             if (p.dueDate > 0L) {
                 val overdue = p.dueDate < today && b > 0L
                 card.addView(text("سررسید: " + date(p.dueDate) + if (overdue) " • سررسید گذشته" else "",
-                    13f, if (overdue) Color.rgb(180, 50, 40) else Color.DKGRAY))
+                    13f, if (overdue) red else muted))
             }
             if (p.note.isNotBlank()) card.addView(text(p.note, 13f, Color.DKGRAY))
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -230,7 +344,7 @@ class MainActivity : Activity() {
         page("پرونده: " + p.name)
         root.addView(btn("← بازگشت به فهرست") { renderHome() })
         root.addView(text("نوع حساب: " + p.kind, 15f, Color.DKGRAY))
-        root.addView(text("مانده فعلی: " + money(balance(p)) + " تومان", 22f, Color.rgb(20, 76, 67)))
+        root.addView(text("مانده فعلی: " + (if (hideAmounts) "••••••" else money(balance(p)) + " تومان"), 22f, Color.rgb(20, 76, 67)))
         root.addView(text("سررسید: " + date(p.dueDate), 14f))
         if (p.note.isNotBlank()) root.addView(text("یادداشت: " + p.note, 14f))
         root.addView(btn("＋ ثبت تراکنش جدید (قرض / پرداخت)") { addTransaction(personId) })
@@ -248,8 +362,8 @@ class MainActivity : Activity() {
                 setBackgroundColor(Color.WHITE)
                 layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(4), 0, dp(4)) }
             }
-            card.addView(text(t.action + " • " + date(t.date), 16f, if (increase) Color.rgb(20, 120, 80) else Color.rgb(180, 65, 50)))
-            card.addView(text(money(t.amount) + " تومان", 18f))
+            card.addView(text(t.action + " • " + date(t.date), 16f, if (increase) green else red))
+            card.addView(text((if (hideAmounts) "••••••" else money(t.amount) + " تومان"), 18f))
             if (t.note.isNotBlank()) card.addView(text(t.note, 13f, Color.DKGRAY))
             card.addView(btn("حذف این تراکنش") {
                 AlertDialog.Builder(this).setMessage("این تراکنش حذف شود؟ مانده حساب دوباره محاسبه می‌شود.")
