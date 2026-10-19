@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'redesign/glass-navy-gold']
+    branches: [main, 'redesign/glass-navy-gold', 'redesign/dashboard-reference-match']
     paths:
       - '**/*.kt'
       - '**/*.kts'
