@@ -228,7 +228,52 @@ class MainActivity : Activity() {
             .setItems(names) { _, which -> addTransaction(people[which].id) }.show()
     }
 
-    private fun renderPeople() { renderHome() }
+    private fun renderPeople() {
+        currentPersonId = null
+        page("اشخاص")
+        root.addView(text("فهرست اشخاص بر اساس بیشترین مانده", 14f, muted))
+        root.addView(btn("＋ افزودن شخص جدید") { addPerson() })
+        val search = input("جست‌وجوی نام شخص")
+        search.setSingleLine(true)
+        search.setText(searchText)
+        root.addView(search)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(list)
+        fun refreshPeople() {
+            list.removeAllViews()
+            val q = searchText.trim()
+            val visible = people.filter { q.isBlank() || it.name.contains(q, true) }
+                .sortedByDescending { balance(it).coerceAtLeast(0L) }
+            if (visible.isEmpty()) {
+                list.addView(text("هنوز شخصی ثبت نشده است.", 14f, muted))
+                return
+            }
+            visible.forEach { p ->
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                    rounded(this, panel, 16)
+                    layoutParams = LinearLayout.LayoutParams(-1, -2).apply {
+                        setMargins(0, dp(5), 0, dp(5))
+                    }
+                }
+                card.addView(text(p.name, 17f, gold))
+                card.addView(text(p.kind, 13f, muted))
+                card.addView(text("مانده: " + (if (hideAmounts) "••••••" else money(balance(p)) + " تومان"), 16f))
+                if (p.dueDate > 0L) card.addView(text("سررسید: " + date(p.dueDate), 13f, muted))
+                val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                actions.addView(btn("پرونده") { renderPerson(p.id) }, LinearLayout.LayoutParams(0, dp(46), 1f))
+                actions.addView(btn("ثبت تراکنش") { addTransaction(p.id) }, LinearLayout.LayoutParams(0, dp(46), 1f))
+                card.addView(actions)
+                list.addView(card)
+            }
+        }
+        search.addTextChangedListener(SimpleWatcher { value ->
+            searchText = value
+            refreshPeople()
+        })
+        refreshPeople()
+    }
 
     private fun renderTransactions() {
         page("همه تراکنش‌ها")
