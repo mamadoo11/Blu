@@ -34,6 +34,9 @@ class MainActivity : Activity() {
     private val transactions = mutableListOf<Tx>()
     private lateinit var root: LinearLayout
     private lateinit var summary: TextView
+    private lateinit var receivableSummary: TextView
+    private lateinit var debtSummary: TextView
+    private lateinit var recentRows: LinearLayout
     private lateinit var rows: LinearLayout
     private var filter = "همه"
     private var searchText = ""
@@ -194,37 +197,66 @@ class MainActivity : Activity() {
     private fun renderHome() {
         currentPersonId = null
         page("حساب‌یار")
-        root.addView(text("دفتر مالی شخصی شما", 14f, muted))
-        root.addView(text("اطلاعات شما فقط روی همین گوشی ذخیره می‌شود", 12f, muted))
-        summary = text("", 16f, Color.WHITE).apply {
-            setPadding(dp(16), dp(18), dp(16), dp(18))
-            setTextColor(Color.WHITE)
-            rounded(this, panel, 20)
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(8), dp(4), dp(14)) }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        brand.addView(text("◈  حساب‌یار", 25f, gold))
+        brand.addView(text("مدیریت مالی شخصی", 13f, muted))
+        header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(text("◉", 26f, gold))
+        root.addView(header)
+
+        summary = text("", 19f, Color.WHITE).apply { setPadding(dp(18), dp(20), dp(18), dp(20)); rounded(this, panel, 24); minHeight = dp(142) }
+        root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+
+        val totals = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        receivableSummary = text("", 15f, green).apply { setPadding(dp(12), dp(14), dp(12), dp(14)); rounded(this, Color.rgb(15, 43, 49), 20); minHeight = dp(112) }
+        debtSummary = text("", 15f, red).apply { setPadding(dp(12), dp(14), dp(12), dp(14)); rounded(this, Color.rgb(47, 29, 43), 20); minHeight = dp(112) }
+        totals.addView(receivableSummary, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+        totals.addView(debtSummary, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(6) })
+        root.addView(totals, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+
+        val quick = btn("＋   ثبت تراکنش جدید   ›") { quickTransaction() }.apply {
+            textSize = 17f; setTextColor(Color.rgb(20, 22, 28)); backgroundTintList = android.content.res.ColorStateList.valueOf(gold); minHeight = dp(62)
         }
-        root.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12); bottomMargin = dp(12) })
-        val quick = btn("＋ ثبت تراکنش جدید") { quickTransaction() }
-        quick.setTextColor(Color.rgb(18,19,22))
-        quick.backgroundTintList = android.content.res.ColorStateList.valueOf(gold)
-        root.addView(quick, LinearLayout.LayoutParams(-1, dp(54)))
-        root.addView(btn("＋ افزودن شخص جدید") { addPerson() })
-        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        tools.addView(btn("پشتیبان‌گیری") { exportBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        tools.addView(btn("بازیابی") { importBackup() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        tools.addView(btn("خروجی CSV") { exportCsv() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.addView(tools)
-        val search = input("جست‌وجوی نام شخص")
-        search.setSingleLine(true)
-        search.setText(searchText)
+        root.addView(quick, LinearLayout.LayoutParams(-1, dp(62)).apply { bottomMargin = dp(16) })
+
+        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        val actions = listOf(
+            Pair("♧", "پشتیبان‌گیری") to { exportBackup() },
+            Pair("↻", "بازیابی") to { importBackup() },
+            Pair("▥", "گزارش‌ها") to { renderTransactions() },
+            Pair("⇩", "خروجی CSV") to { exportCsv() }
+        )
+        actions.forEach { item ->
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(3), dp(10), dp(3), dp(10)); rounded(this, panel, 17)
+                isClickable = true; setOnClickListener { item.second() }
+            }
+            tile.addView(text(item.first.first, 23f, gold).apply { gravity = Gravity.CENTER })
+            tile.addView(text(item.first.second, 11f, muted).apply { gravity = Gravity.CENTER })
+            tools.addView(tile, LinearLayout.LayoutParams(0, dp(88), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+        }
+        root.addView(tools, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(18) })
+
+        val recentHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        recentHeader.addView(text("آخرین تراکنش‌ها  ◷", 18f, Color.WHITE), LinearLayout.LayoutParams(0, -2, 1f))
+        recentHeader.addView(text("مشاهده همه  ‹", 12f, gold).apply { setOnClickListener { renderTransactions() }; isClickable = true })
+        root.addView(recentHeader)
+        recentRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(recentRows, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(14) })
+
+        root.addView(text("پرونده اشخاص", 19f, gold))
+        val search = input("جست‌وجوی نام شخص").apply { setSingleLine(true); setText(searchText) }
         root.addView(search)
         search.addTextChangedListener(SimpleWatcher { value -> searchText = value; refreshRows() })
-        val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val filterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
         listOf("همه", "طلب من", "بدهی من", "سررسید گذشته").forEach { f ->
-            filterRow.addView(btn(f) { filter = f; refreshRows() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+            filterRow.addView(btn(f) { filter = f; refreshRows() }, LinearLayout.LayoutParams(0, dp(46), 1f))
         }
         root.addView(filterRow)
-        root.addView(text("پرونده اشخاص", 20f, gold))
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(rows)
+        root.addView(btn("＋ افزودن شخص جدید") { addPerson() })
         refreshRows()
     }
 
@@ -346,10 +378,24 @@ class MainActivity : Activity() {
         if (!::rows.isInitialized || !::summary.isInitialized) return
         val openDebt = people.filter { it.kind == "بدهی من" }.sumOf { balance(it).coerceAtLeast(0L) }
         val openReceivable = people.filter { it.kind == "طلب من" }.sumOf { balance(it).coerceAtLeast(0L) }
-        summary.text = "مانده خالص\n" + (if (hideAmounts) "••••••" else money(openReceivable - openDebt) + " تومان") +
-            "\n\nطلب از دیگران   " + (if (hideAmounts) "••••" else money(openReceivable) + " تومان") +
-            "\nبدهی من به دیگران   " + (if (hideAmounts) "••••" else money(openDebt) + " تومان") +
-            "\n\nپرونده‌ها: " + people.size + "     تراکنش‌ها: " + transactions.size
+        summary.text = "◈  مانده خالص کل\\n\\n" + (if (hideAmounts) "••••••" else money(openReceivable - openDebt) + " تومان") + "\\n\\nطلب‌ها و بدهی‌ها در یک نگاه"
+        receivableSummary.text = "↑  مجموع طلب‌ها\\n\\n" + (if (hideAmounts) "••••" else money(openReceivable) + " تومان") + "\\nتعداد: " + people.count { it.kind == "طلب من" }
+        debtSummary.text = "↓  مجموع بدهی‌ها\\n\\n" + (if (hideAmounts) "••••" else money(openDebt) + " تومان") + "\\nتعداد: " + people.count { it.kind == "بدهی من" }
+        recentRows.removeAllViews()
+        val recent = transactions.sortedByDescending { it.date }.take(3)
+        if (recent.isEmpty()) {
+            recentRows.addView(text("هنوز تراکنشی ثبت نشده است.", 14f, muted).apply { setPadding(dp(14), dp(18), dp(14), dp(18)); rounded(this, panel, 16) })
+        } else recent.forEach { tx ->
+            val person = people.firstOrNull { it.id == tx.personId } ?: return@forEach
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); rounded(this, panel, 16)
+                layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(4), 0, dp(4)) }
+                isClickable = true; setOnClickListener { renderPerson(person.id) }
+            }
+            card.addView(text(person.name + "  ·  " + tx.action, 15f, Color.WHITE))
+            card.addView(text((if (hideAmounts) "••••" else money(tx.amount) + " تومان") + "   ·   " + date(tx.date), 13f, muted))
+            recentRows.addView(card)
+        }
         rows.removeAllViews()
         val today = dayStart(System.currentTimeMillis())
         val visible = people.filter { p ->
