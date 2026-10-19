@@ -1,0 +1,73 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.kt'
+      - '**/*.kts'
+      - '**/*.java'
+      - '**/*.xml'
+      - 'gradlew'
+      - 'gradle/**'
+      - 'settings.gradle*'
+      - 'build.gradle*'
+      - 'gradle.properties'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-project:
+    name: Check Android project
+    runs-on: ubuntu-latest
+    outputs:
+      has_gradle: ${{ steps.check.outputs.has_gradle }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Detect Gradle wrapper
+        id: check
+        shell: bash
+        run: |
+          if [ -f gradlew ] && { [ -f settings.gradle ] || [ -f settings.gradle.kts ]; }; then
+            echo "has_gradle=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_gradle=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Explain missing Android project
+        if: ${{ steps.check.outputs.has_gradle != 'true' }}
+        run: |
+          echo "::warning::No root Gradle Android project found."
+          echo "Upload/sync the complete Google AI Studio Android project to this repository."
+          echo "Expected files include gradlew, settings.gradle.kts, and app/build.gradle.kts."
+
+  build-debug-apk:
+    name: Build debug APK
+    needs: check-project
+    if: ${{ needs.check-project.outputs.has_gradle == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Build APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
+          retention-days: 7
